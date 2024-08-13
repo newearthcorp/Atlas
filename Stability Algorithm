@@ -1,0 +1,69 @@
+import requests
+from datetime import datetime, timedelta
+
+# Constants
+TOTAL_TOKENS = 1_000_000_000  # 1 Billion tokens
+BASE_ELECTRICITY_PRICE = 0.16  # $0.16 per kWh (new base price)
+BASE_DATE = datetime(2024, 6, 29)  # Date of initialization
+
+def get_current_electricity_price():
+    """
+    Fetch the current average national price of electricity in the US.
+    This is a placeholder function. In a real implementation, you would
+    need to use an actual API or data source for this information.
+    """
+    # Placeholder: In reality, you'd fetch this from an energy data API
+    return 0.17  # Example current price: $0.17 per kWh
+
+def get_cryptocurrency_price():
+    """
+    Fetch the current price of the cryptocurrency.
+    This is a placeholder function. In a real implementation, you would
+    need to use an actual cryptocurrency API for this information.
+    """
+    # Placeholder: In reality, you'd fetch this from a crypto API
+    return 1.20  # Example current price: $1.20 per token
+
+def calculate_years_since_base():
+    current_date = datetime.now()
+    years_passed = (current_date - BASE_DATE).days / 365.25
+    return years_passed
+
+def calculate_index():
+    current_electricity_price = get_current_electricity_price()
+    current_crypto_price = get_cryptocurrency_price()
+    years_since_base = calculate_years_since_base()
+
+    # Calculate the expected electricity price based on years passed
+    expected_electricity_price = BASE_ELECTRICITY_PRICE * (1 + 0.03) ** years_since_base  # Assuming 3% annual increase
+
+    # Calculate the relative change in electricity price
+    electricity_price_change = (current_electricity_price - expected_electricity_price) / expected_electricity_price
+
+    # Apply a damping factor to prevent extreme swings
+    damping_factor = 0.5
+    adjusted_change = electricity_price_change * damping_factor
+
+    # Calculate the new total value of all tokens
+    new_total_value = TOTAL_TOKENS * current_crypto_price * (1 + adjusted_change)
+
+    # Calculate the new price per token
+    new_token_price = new_total_value / TOTAL_TOKENS
+
+    # Apply a maximum change limit (e.g., 10% per calculation)
+    max_change = 0.10
+    if abs(new_token_price - current_crypto_price) / current_crypto_price > max_change:
+        if new_token_price > current_crypto_price:
+            new_token_price = current_crypto_price * (1 + max_change)
+        else:
+            new_token_price = current_crypto_price * (1 - max_change)
+
+    return new_token_price
+
+def main():
+    indexed_price = calculate_index()
+    print(f"The new indexed price per token is: ${indexed_price:.4f}")
+
+if __name__ == "__main__":
+    main()
+
