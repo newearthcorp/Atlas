@@ -1,0 +1,63 @@
+// SPDX-License-Identifierpragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
+
+contract ElectricityPriceOracle is Ownable, ChainlinkClient {
+    using Chainlink for Chainlink.Request;
+
+        address private oracle;
+    bytes32 private jobId;
+    uint256 private fee;
+
+    event PriceUpdated(uint256 price);
+
+    constructor() {
+        setPublicChainlinkToken();
+        oracle = 0x3A56aE4a2831C3d3514b5D7Af5578E45eBDb7a40; // Example Chainlink oracle address
+        jobId = "3b7ca0d48c7a4b2da9268456665d11ae"; // Example job ID
+        fee = 0.1 * 10 ** 18; // 0.1 LINK
+    }
+
+    function requestElectricityPrice() public returns (bytes32 requestId) {
+        
+        // Set the URL to perform the GET request on
+        request.add("get", "https://api.example.com/electricity-price");
+        
+        // Set the path to find the desired data in the API response
+        request.add("path", "price");
+        
+        // Multiply the result by 1000000000000000000 to remove decimals
+        int timesAmount = 10**1        request.addInt("times", timesAmount);
+        
+        // Send the request
+        return sendChainlinkRequestTo(oracle, request, fee);
+    }
+
+    function fulfill(bytes32 _requestId, uint256 _price) public rec        currentPrice = _price;
+        emit PriceUpdated(_price);
+    }
+
+    function getElectricityPrice() external view returns (uint256) {
+        return currentPrice;
+    }
+
+    // Function to update the oracle address
+    function setOracle(address _oracle)         oracle = _oracle;
+    }
+
+    // Function to update the jobId
+    function setJobId(bytes32 _jobId) external onlyOwner {
+        jobId = _jobId;
+    }
+
+    // Function to update the fee
+    function setFee(uint256 _fee) external onlyOwner {
+     }
+
+    // Function to withdraw LINK tokens from the contract
+    function withdrawLink() external onlyOwner {
+        LinkTokenInterface linkToken = LinkTokenInterface(chainlinkTokenAddress());
+        require(linkToken.transfer(msg.sender, linkToken.balanceOf(address(this))), "Unable to transfer");
+    }
+}
