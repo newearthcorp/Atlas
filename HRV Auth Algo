@@ -1,0 +1,74 @@
+import numpy as np
+import hashlib
+
+# Example NN intervals (in milliseconds)
+nn_intervals = [800, 810, 790, 805, 780, 795, 810, 800]  # Replace with actual data
+
+# Example age and gender inputs
+age = 25  # Replace with actual age
+gender = 'M'  # Replace with 'F' for female
+
+# 1. Calculate SDNN
+def calculate_sdnn(nn_intervals):
+    mean_nn = np.mean(nn_intervals)
+    sdnn = np.sqrt(np.mean((nn_intervals - mean_nn) ** 2))
+    return sdnn
+
+# 2. Calculate RMSSD
+def calculate_rmssd(nn_intervals):
+    successive_diff = np.diff(nn_intervals)  # Differences between successive NN intervals
+    rmssd = np.sqrt(np.mean(successive_diff ** 2))
+    return rmssd
+
+# 3. Calculate the ratio R = SDNN / RMSSD
+def calculate_ratio(sdnn, rmssd):
+    if rmssd == 0:
+        return 0
+    return sdnn / rmssd
+
+# 4. Convert age and gender to binary
+def convert_to_binary(value, bits=8):
+    return format(value, f'0{bits}b')
+
+def gender_to_binary(gender):
+    return '1' if gender == 'M' else '0'
+
+# 5. Perform XOR operation to generate the key
+def xor_operation(bin1, bin2):
+    # Convert binary strings to integers, perform XOR, and convert back to binary
+    return format(int(bin1, 2) ^ int(bin2, 2), '016b')
+
+# 6. Generate the 16-bit binary authentication key
+def generate_key(ratio, age, gender):
+    binary_ratio = convert_to_binary(int(ratio * 1000), 16)  # Scale ratio and convert to binary
+    binary_age = convert_to_binary(age, 16)
+    binary_gender = gender_to_binary(gender).zfill(16)
+    
+    key = xor_operation(binary_ratio, binary_age)
+    key = xor_operation(key, binary_gender)
+    
+    return key
+
+# 7. Optionally, hash the key using SHA-1
+def hash_key(key):
+    sha1 = hashlib.sha1()
+    sha1.update(key.encode())
+    return sha1.hexdigest()
+
+# Calculate SDNN, RMSSD, and the ratio
+sdnn = calculate_sdnn(np.array(nn_intervals))
+rmssd = calculate_rmssd(np.array(nn_intervals))
+ratio = calculate_ratio(sdnn, rmssd)
+
+# Generate the 16-bit authentication key
+auth_key = generate_key(ratio, age, gender)
+
+# Optionally, hash the key
+hashed_key = hash_key(auth_key)
+
+# Print results
+print(f"SDNN: {sdnn}")
+print(f"RMSSD: {rmssd}")
+print(f"Ratio (SDNN/RMSSD): {ratio}")
+print(f"16-bit Authentication Key: {auth_key}")
+print(f"SHA-1 Hashed Key: {hashed_key}")
