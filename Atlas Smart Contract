@@ -3,46 +3,69 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/TokenTimelock.sol";
 
-contract EStablecoin is ERC20, Ownable {
-    // Price feed interface
-    interface IElectricityPriceOracle {
-        function getElectricityPrice() external view returns (uint256);
+contract AtlasToken is ERC20, Ownable {
+    uint256 private constant TOTAL_SUPPLY = 100_000_000_000 * 10**18; // 100 billion tokens with 18 decimals
+    uint256 private constant COMMUNITY_ALLOCATION = (TOTAL_SUPPLY * 731) / 1000; // 73.1% for community
+    uint256 private constant INVESTORS_ALLOCATION = (TOTAL_SUPPLY * 100) / 1000; // 10% for investors
+    uint256 private constant TEAM_ALLOCATION = TOTAL_SUPPLY - COMMUNITY_ALLOCATION - INVESTORS_ALLOCATION; // 16.9% for the team
+
+    address public immutable communityWallet;
+    address public immutable investorsWallet;
+    address public immutable teamWallet;
+
+    // Token Timelock contracts
+    TokenTimelock public investorsTimelock;
+    TokenTimelock public teamTimelock;
+
+    constructor(
+        address _communityWallet,
+        address _investorsWallet,
+        address _teamWallet
+    ) ERC20("Atlas", "ATLAS") {
+        require(_communityWallet != address(0), "Invalid community wallet address");
+        require(_investorsWallet != address(0), "Invalid investors wallet address");
+        require(_teamWallet != address(0), "Invalid team wallet address");
+
+        communityWallet = _communityWallet;
+        investorsWallet = _investorsWallet;
+        teamWallet = _teamWallet;
+
+        // Minting full supply
+        _mint(address(this), TOTAL_SUPPLY);
+
+        // Distribute tokens to the community wallet immediately
+        _transfer(address(this), communityWallet, COMMUNITY_ALLOCATION);
+
+        // Set up time locks
+        uint256 releaseTime = block.timestamp + 3 years;
+        investorsTimelock = new TokenTimelock(this, investorsWallet, releaseTime);
+        teamTimelock = new TokenTimelock(this, teamWallet, releaseTime);
+
+        // Transfer tokens to timelocks for vesting
+        _transfer(address(this), address(investorsTimelock), INVESTORS_ALLOCATION);
+        _transfer(address(this), address(teamTimelock), TEAM_ALLOCATION);
     }
 
-    IElectricityPriceOracle public oracle;
-    uint256 public constant TARGET_PRICE = 16 * 10**16; // $0.16 per kWh in wei
-    uint256 public constant LOWER_BOUND = 10 * 10**16; // $0.10 per kWh in wei
-    uint256 public constant UPPER_BOUND = 16 * 10**16; // $0.16 per kWh in wei
-    uint256 public constant ADJUSTMENT_THRESHOLD = 5 * 10**15; // $0.005 in wei
+    // Function to distribute community tokens over 3 years, to be implemented based on your needs
+    function distributeCommunityTokens(address[] calldata recipients, uint256[] calldata amounts) external onlyOwner {
+        require(recipients.length == amounts.length, "Invalid input lengths");
 
-    constructor(address _oracle) ERC20("Electricity Stablecoin", "ESTABLE") {
-        oracle = IElectricityPriceOracle(_oracle);
-    }
-
-    function mint(address to, uint256 amount) external onlyOwner {
-        _mint(to, amount);
-        _adjustSupply();
-    }
-
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
-        _adjustSupply();
-    }
-
-    function _adjustSupply() internal {
-        uint256 currentPrice = oracle.getElectricityPrice();
-        
-        if (currentPrice < LOWER_BOUND) {
-            uint256 burnAmount = totalSupply() * (LOWER_BOUND - currentPrice) / LOWER_BOUND;
-            _burn(address(this), burnAmount);
-        } else if (currentPrice > UPPER_BOUND) {
-            uint256 mintAmount = totalSupply() * (currentPrice - UPPER_BOUND) / UPPER_BOUND;
-            _mint(address(this), mintAmount);
+        for (uint256 i = 0; i < recipients.length; i++) {
+            _transfer(communityWallet, recipients[i], amounts[i]);
         }
     }
 
-    function setOracle(address _oracle) external onlyOwner {
-        oracle = IElectricityPriceOracle(_oracle);
+    // Function to release vested tokens after the 3-year lock-up period
+    function releaseInvestorsTokens() external {
+        require(block.timestamp >= investorsTimelock.releaseTime(), "Tokens are still locked");
+        investorsTimelock.release();
+    }
+
+    function releaseTeamTokens() external {
+        require(block.timestamp >= teamTimelock.releaseTime(), "Tokens are still locked");
+        teamTimelock.release();
     }
 }
+
