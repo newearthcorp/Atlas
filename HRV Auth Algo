@@ -1,74 +1,89 @@
 import numpy as np
 import hashlib
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
-# Example NN intervals (in milliseconds)
-nn_intervals = [800, 810, 790, 805, 780, 795, 810, 800]  # Replace with actual data
+# ... [Previous functions remain unchanged] ...
 
-# Example age and gender inputs
-age = 25  # Replace with actual age
-gender = 'M'  # Replace with 'F' for female
-
-# 1. Calculate SDNN
-def calculate_sdnn(nn_intervals):
-    mean_nn = np.mean(nn_intervals)
-    sdnn = np.sqrt(np.mean((nn_intervals - mean_nn) ** 2))
-    return sdnn
-
-# 2. Calculate RMSSD
-def calculate_rmssd(nn_intervals):
-    successive_diff = np.diff(nn_intervals)  # Differences between successive NN intervals
-    rmssd = np.sqrt(np.mean(successive_diff ** 2))
-    return rmssd
-
-# 3. Calculate the ratio R = SDNN / RMSSD
-def calculate_ratio(sdnn, rmssd):
-    if rmssd == 0:
-        return 0
-    return sdnn / rmssd
-
-# 4. Convert age and gender to binary
-def convert_to_binary(value, bits=8):
-    return format(value, f'0{bits}b')
-
-def gender_to_binary(gender):
-    return '1' if gender == 'M' else '0'
-
-# 5. Perform XOR operation to generate the key
-def xor_operation(bin1, bin2):
-    # Convert binary strings to integers, perform XOR, and convert back to binary
-    return format(int(bin1, 2) ^ int(bin2, 2), '016b')
-
-# 6. Generate the 16-bit binary authentication key
-def generate_key(ratio, age, gender):
-    binary_ratio = convert_to_binary(int(ratio * 1000), 16)  # Scale ratio and convert to binary
-    binary_age = convert_to_binary(age, 16)
-    binary_gender = gender_to_binary(gender).zfill(16)
+# New score fusion function
+def fuse_scores(hrv_score, face_score, vein_score, weights=None):
+    if weights is None:
+        weights = [1/3, 1/3, 1/3]  # Equal weights by default
     
-    key = xor_operation(binary_ratio, binary_age)
+    # Normalize HRV score (assuming it's in the range [0, 2])
+    normalized_hrv_score = min(hrv_score / 2, 1)
+    
+    # Combine scores using weighted sum
+    fused_score = (
+        weights[0] * normalized_hrv_score +
+        weights[1] * face_score +
+        weights[2] * vein_score
+    )
+    
+    return fused_score
+
+# Updated key generation function
+def generate_key(fused_score, age, gender):
+    binary_score = convert_to_binary(int(fused_score * 1000), 32)
+    binary_age = convert_to_binary(age, 32)
+    binary_gender = gender_to_binary(gender).zfill(32)
+    
+    key = xor_operation(binary_score, binary_age)
     key = xor_operation(key, binary_gender)
     
     return key
 
-# 7. Optionally, hash the key using SHA-1
-def hash_key(key):
-    sha1 = hashlib.sha1()
-    sha1.update(key.encode())
-    return sha1.hexdigest()
+# Updated main authentication function
+def authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights=None):
+    # HRV calculations
+    sdnn = calculate_sdnn(np.array(nn_intervals))
+    rmssd = calculate_rmssd(np.array(nn_intervals))
+    hrv_score = calculate_ratio(sdnn, rmssd)
+    
+    # Facial recognition
+    face_score = facial_recognition_score(face_features)
+    
+    # Vein pattern recognition
+    vein_score = vein_pattern_score(vein_pattern)
+    
+    # Fuse scores
+    fused_score = fuse_scores(hrv_score, face_score, vein_score, weights)
+    
+    # Generate authentication key
+    auth_key = generate_key(fused_score, age, gender)
+    
+    # Hash the key
+    hashed_key = hash_key(auth_key)
+    
+    return {
+        'sdnn': sdnn,
+        'rmssd': rmssd,
+        'hrv_score': hrv_score,
+        'face_score': face_score,
+        'vein_score': vein_score,
+        'fused_score': fused_score,
+        'auth_key': auth_key,
+        'hashed_key': hashed_key
+    }
 
-# Calculate SDNN, RMSSD, and the ratio
-sdnn = calculate_sdnn(np.array(nn_intervals))
-rmssd = calculate_rmssd(np.array(nn_intervals))
-ratio = calculate_ratio(sdnn, rmssd)
+# Example usage
+nn_intervals = [800, 810, 790, 805, 780, 795, 810, 800]
+age = 25
+gender = 'M'
+face_features = np.random.rand(128)  # Simulated 128-dimensional face embedding
+vein_pattern = np.random.rand(64)   # Simulated 64-point vein pattern
 
-# Generate the 16-bit authentication key
-auth_key = generate_key(ratio, age, gender)
+# Custom weights (optional)
+custom_weights = [0.4, 0.3, 0.3]  # Emphasize HRV score
 
-# Optionally, hash the key
-hashed_key = hash_key(auth_key)
+result = authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights=custom_weights)
 
-# Print results
-print(f"SDNN: {sdnn}")
-print(f"RMSSD: {rmssd}")
-print(f"Ratio (SDNN/RMSSD): {ratio}")
-print(f"16-bit Authentication Key: {auth_key}")
-print(f"SHA-1 Hashed Key: {hashed_key}")
+for key, value in result.items():
+    print(f"{key}: {value}")
+
+# Threshold-based decision (example)
+authentication_threshold = 0.7
+if result['fused_score'] >= authentication_threshold:
+    print("Authentication successful!")
+else:
+    print("Authentication failed.")
