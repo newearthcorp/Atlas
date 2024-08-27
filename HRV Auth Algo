@@ -3,9 +3,46 @@ import hashlib
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-# ... [Previous functions remain unchanged] ...
+# HRV-related functions
+def calculate_sdnn(nn_intervals):
+    mean_nn = np.mean(nn_intervals)
+    sdnn = np.sqrt(np.mean((nn_intervals - mean_nn) ** 2))
+    return sdnn
 
-# New score fusion function
+def calculate_rmssd(nn_intervals):
+    successive_diff = np.diff(nn_intervals)
+    rmssd = np.sqrt(np.mean(successive_diff ** 2))
+    return rmssd
+
+def calculate_ratio(sdnn, rmssd):
+    return sdnn / rmssd if rmssd != 0 else 0
+
+# Utility functions
+def convert_to_binary(value, bits=8):
+    return format(value, f'0{bits}b')
+
+def gender_to_binary(gender):
+    return '1' if gender == 'M' else '0'
+
+def xor_operation(bin1, bin2):
+    return format(int(bin1, 2) ^ int(bin2, 2), '032b')
+
+# Facial recognition function
+def facial_recognition_score(face_features):
+    pca = PCA(n_components=5)
+    face_features_pca = pca.fit_transform(face_features.reshape(1, -1))
+    distance = np.linalg.norm(face_features_pca)
+    score = 1 - min(distance / 10, 1)
+    return score
+
+# Vein pattern recognition function
+def vein_pattern_score(vein_pattern):
+    mean = np.mean(vein_pattern)
+    std = np.std(vein_pattern)
+    score = (mean + std) / 2
+    return score
+
+# Score fusion function
 def fuse_scores(hrv_score, face_score, vein_score, weights=None):
     if weights is None:
         weights = [1/3, 1/3, 1/3]  # Equal weights by default
@@ -22,7 +59,7 @@ def fuse_scores(hrv_score, face_score, vein_score, weights=None):
     
     return fused_score
 
-# Updated key generation function
+# Key generation function
 def generate_key(fused_score, age, gender):
     binary_score = convert_to_binary(int(fused_score * 1000), 32)
     binary_age = convert_to_binary(age, 32)
@@ -33,7 +70,13 @@ def generate_key(fused_score, age, gender):
     
     return key
 
-# Updated main authentication function
+# Hash function
+def hash_key(key):
+    sha256 = hashlib.sha256()
+    sha256.update(key.encode())
+    return sha256.hexdigest()
+
+# Main authentication function
 def authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights=None):
     # HRV calculations
     sdnn = calculate_sdnn(np.array(nn_intervals))
@@ -67,23 +110,24 @@ def authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights
     }
 
 # Example usage
-nn_intervals = [800, 810, 790, 805, 780, 795, 810, 800]
-age = 25
-gender = 'M'
-face_features = np.random.rand(128)  # Simulated 128-dimensional face embedding
-vein_pattern = np.random.rand(64)   # Simulated 64-point vein pattern
+if __name__ == "__main__":
+    nn_intervals = [800, 810, 790, 805, 780, 795, 810, 800]
+    age = 25
+    gender = 'M'
+    face_features = np.random.rand(128)  # Simulated 128-dimensional face embedding
+    vein_pattern = np.random.rand(64)   # Simulated 64-point vein pattern
 
-# Custom weights (optional)
-custom_weights = [0.4, 0.3, 0.3]  # Emphasize HRV score
+    # Custom weights (optional)
+    custom_weights = [0.4, 0.3, 0.3]  # Emphasize HRV score
 
-result = authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights=custom_weights)
+    result = authenticate(nn_intervals, age, gender, face_features, vein_pattern, weights=custom_weights)
 
-for key, value in result.items():
-    print(f"{key}: {value}")
+    for key, value in result.items():
+        print(f"{key}: {value}")
 
-# Threshold-based decision (example)
-authentication_threshold = 0.7
-if result['fused_score'] >= authentication_threshold:
-    print("Authentication successful!")
-else:
-    print("Authentication failed.")
+    # Threshold-based decision (example)
+    authentication_threshold = 0.7
+    if result['fused_score'] >= authentication_threshold:
+        print("Authentication successful!")
+    else:
+        print("Authentication failed.")
